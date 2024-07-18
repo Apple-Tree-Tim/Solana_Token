@@ -21,7 +21,12 @@ const {
   LENGTH_SIZE,
   TOKEN_2022_PROGRAM_ID,
   TYPE_SIZE,
-} =  require('@solana/spl-token');
+  getAssociatedTokenAddress,
+  createAssociatedTokenAccountInstruction,
+  AuthorityType,
+  createMintToCheckedInstruction,
+  createSetAuthorityInstruction,
+} = require('@solana/spl-token');
 
 export default async function createTokenWithEmbeddedMetadata(inputs: CreateTokenInputs) {
   const { payer, connection, tokenName, tokenSymbol, tokenUri, tokenAdditionalMetadata } = inputs;
@@ -59,7 +64,7 @@ export default async function createTokenWithEmbeddedMetadata(inputs: CreateToke
   };
 
   // 2. Allocate the mint
-  const mintLen = getMintLen([ExtensionType.MetadataPointer]);
+  const mintLen = getMintLen([ExtensionType.TransferFeeConfig, ExtensionType.MetadataPointer]);
   const metadataLen = TYPE_SIZE + LENGTH_SIZE + pack(metadata).length;
   const lamports = await connection.getMinimumBalanceForRentExemption(mintLen + metadataLen);
 
@@ -98,7 +103,7 @@ export default async function createTokenWithEmbeddedMetadata(inputs: CreateToke
     TOKEN_2022_PROGRAM_ID,
   );
 
-  // 6. Initialize the metadata inside the mint (that will set name, symbol, and uri for the mint)\
+  // 6. Initialize the metadata inside the mint (that will set name, symbol, and uri for the mint)
   const initMetadataInstruction = createInitializeInstruction({
     programId: TOKEN_2022_PROGRAM_ID,
     mint: mint,
@@ -111,7 +116,7 @@ export default async function createTokenWithEmbeddedMetadata(inputs: CreateToke
   });
 
   // 7. Set the additional metadata in the mint
-  const setExtraMetadataInstructions: typeof TransactionInstruction[] = [];
+  const setExtraMetadataInstructions: (typeof TransactionInstruction)[] = [];
 
   for (const attributes of Object.entries(tokenAdditionalMetadata || [])) {
     setExtraMetadataInstructions.push(
@@ -125,6 +130,30 @@ export default async function createTokenWithEmbeddedMetadata(inputs: CreateToke
     );
   }
 
+  const ata = Keypair.fromSecretKey(
+    new Uint8Array([205,209,103,199,50,172,215,185,251,219,67,180,138,198,220,91,196,119,73,178,87,9,13,92,156,20,153,252,21,63,142,43,82,120,161,44,186,196,250,24,186,1,246,55,119,79,96,42,68,129,127,136,233,152,252,58,134,145,106,107,236,93,190,242])
+  );
+
+  const mintInstruction = createMintToCheckedInstruction(
+    mint,
+    ata.publicKey,
+    mintAuthority.publicKey,
+    supply, // Tokens should have 10 Billions
+    decimals,
+    [payer.publicKey, mintAuthority.publicKey],
+    TOKEN_2022_PROGRAM_ID,
+  );
+
+  // Tokens should have no mint authority so no one can mint any more of the same Token
+  const setMintTokenAuthorityInstruction = createSetAuthorityInstruction(
+    mint,
+    mintAuthority.publicKey,
+    AuthorityType.MintTokens,
+    ata.publicKey,
+    [payer.publicKey, mintAuthority.publicKey],
+    TOKEN_2022_PROGRAM_ID,
+  );
+
   // 8. Put all of that in one transaction and send it to the network.
   const transaction = new Transaction().add(
     createMintAccountInstruction,
@@ -133,11 +162,15 @@ export default async function createTokenWithEmbeddedMetadata(inputs: CreateToke
     initializeMintInstruction,
     initMetadataInstruction,
     ...setExtraMetadataInstructions,
+    mintInstruction,
+    setMintTokenAuthorityInstruction,
   );
-  const transactionSignature = await sendAndConfirmTransaction(connection, transaction, [payer, mintKeypair, mintAuthority], undefined);
+  const transactionSignature = await sendAndConfirmTransaction(
+    connection,
+    transaction,
+    [payer, mintKeypair, mintAuthority],
+    undefined,
+  );
   // 9. fetch and print the token account, the mint account, an the metadata to make sure that it is working correctly
-  console.log(
-    'Token created!',
-    `https://solscan.io/tx/${transactionSignature}?cluster=devnet`
-  );
+  console.log('Token created!', `https://solscan.io/tx/${transactionSignature}?cluster=devnet`);
 }
