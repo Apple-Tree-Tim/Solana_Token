@@ -1,0 +1,17 @@
+{
+    "name": "Trump Bulletverse",
+    "symbol": "$BTrump",
+    "description": "The First AI-powered Memecoin Creating Infinite Meme Games on Solana",
+    "external_url": "https://solana.com/",
+    "image": "https://gateway.irys.xyz/CUvs4wkh2d5wjhHrSiILk7D_LuoyOgtEhXkEp68TSGo",
+    "attributes": [
+        {
+            "trait_type": "speciality",
+            "value": "Trump"
+        },
+        {
+            "trait_type": "personality",
+            "value": "Cool"
+        }
+    ]
+}
